@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# A simple native messaging host. Shows a Tkinter dialog with incoming messages
+# that also allows to send message back to the webapp.
+
+import struct
+import sys
+
+# On Windows, the default I/O mode is O_TEXT. Set this to O_BINARY
+# to avoid unwanted modifications of the input/output streams.
+if sys.platform == "win32":
+  import os, msvcrt
+  msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+  msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
+# Helper function that sends a message to the webapp.
+def send_message(message):
+  message = message.encode('utf-8')
+   # Write message size.
+  sys.stdout.write(struct.pack('I', len(message)))
+  # Write the message itself.
+  sys.stdout.write(message)
+  sys.stdout.flush()
+
+# Thread that reads messages from the webapp.
+def read_from_webapp():
+  # Read the message length (first 4 bytes).
+  text_length_bytes = sys.stdin.read(4)
+
+  if len(text_length_bytes) == 0:
+    raise Exception('get 0 length message')
+
+  # Unpack message length as 4 byte integer.
+  text_length = struct.unpack('i', text_length_bytes)[0]
+
+  # Read the text (JSON object) of the message.
+  text = sys.stdin.read(text_length).decode('utf-8')
+  if text[0] in ('\'', '\"'):
+    text = text[1:]
+  if text[-1] in ('\'', '\"'):
+    text = text[:-1]
+  return text
+
+def Main():
+  import win32print
+  
+  printer_name = win32print.GetDefaultPrinter ()
+  hPrinter = win32print.OpenPrinter (printer_name) 
+  
+  f = open('D:\\chrome_log.log', 'w+')
+  while 1:
+ 
+    hJob = win32print.StartDocPrinter (hPrinter, 1, ("job", None, None))
+    text = read_from_webapp().encode('gb2312')
+
+    raw_data = ("{fs}&" + text + "{cr}{lf}")
+    str_data = raw_data.replace('{esc}',chr(27)).replace('{fs}', chr(28)).replace('{cr}', chr(13)).replace('{lf}', chr(10))
+
+    win32print.StartPagePrinter (hPrinter)
+    win32print.WritePrinter (hPrinter, str_data)
+    win32print.EndPagePrinter (hPrinter)
+  
+    win32print.EndDocPrinter (hPrinter)
+
+  win32print.ClosePrinter (hPrinter)
+  f.close()
+  
+  import time
+  time.sleep(10)
+
+if __name__ == '__main__':
+  Main()
